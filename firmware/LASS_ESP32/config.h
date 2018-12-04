@@ -21,7 +21,7 @@ char blynk_auth[] = "yourBlynkID"; // REPLACE: your Blynk auto id
 //Step 3:MQTT info
 //MQTT-IoT
 #define MQTT_PROXY_IP "gpssensor.ddns.net"		// Current LASD server , dont change!
-#define DEVICE_TYPE  "ESP-WROOM-32"				// since there is only one device LASS supported now,dont change!
+#define DEVICE_TYPE  "ESP32"				// since there is only one device LASS supported now,dont change!
 #define DEVICE_ID "FT1_ESP_999"					// REPLACE: The device ID you like, please start from LASD. Without this prefix, maybe it will be filter out.
 #define MQTT_TOPIC_PREFIX "LASS/Test"			// CAN REPLACE if you like //Dont Replace IF YOU ARE FIELD-TRY USER
 #define PARTNER_ID "Anemoneryu"				// CAN REPLACE if you like
@@ -82,21 +82,20 @@ enum pinConfig {
 	0 : undefine
 	1 : DHT11
 	2 : DHT22
+	3 : SHT31
 	*/
-	#define temp_humi_sensor 0
+	#define temp_humi_sensor 3
 
 	/*	define PM2.5 sensor
-	0 : PMS1003 G1
-	1 : PMS3003 G3
-	2 :
+	0 : undefine
+	1 : PMS1003 G1
+	2 : PMS3003 G3
+	3 : PMS5003 G5
+	4 : PMS5003T G5T
+	5 : 
 	*/
 	#define PM25_sensor 1
 
-	//#define USE_PM25_G3
-	//#define USE_PM25_A4
-	//#define USE_DHT22  // not recommend for DHT series sensors
-	//#define USE_DHT11 
-	//#define USE_SHT31
 	//#define USE_LCD  // use 1602 i2c LCD...
 	#define SENSOR_ID_DUST 10
 	#define SENSOR_ID_TEMPERATURE 11
@@ -157,3 +156,4 @@ enum pinConfig {
 #define LED_STATE_OFF 0
 #define LED_STATE_READY 1
 #define LED_STATE_ERROR 2
+

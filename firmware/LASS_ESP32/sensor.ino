@@ -1,6 +1,6 @@
 
 
-#if temp_humi_sensor == 1 || temp_humi_sensor ==2
+#if temp_humi_sensor == 1 || temp_humi_sensor == 2
 	#include <DHTesp-master/DHTesp.h>	// Reference: https://github.com/beegee-tokyo/DHTesp
 	DHTesp dht;
 	hw_timer_t * timer;
@@ -8,6 +8,11 @@
 	void IRAM_ATTR onTimer() {
 		xSemaphoreGiveFromISR(syncSemaphore, NULL);
 	}
+#elif temp_humi_sensor == 3 
+	#include <Wire.h>
+	#include "Adafruit_SHT31.h"
+	Adafruit_SHT31 sht31 = Adafruit_SHT31();
+	//SHT3X sht3x;
 #endif // temp_humi_sensor == 1
 
 
@@ -26,6 +31,12 @@ int sensor_setup() {
 		timerAttachInterrupt(timer, &onTimer, true);
 		timerAlarmWrite(timer, 10000000, true);
 		timerAlarmEnable(timer);  
+	#elif temp_humi_sensor == 3
+		if (!sht31.begin(0x44))
+		{
+			Serial.println("Couldn't find SHT31");
+		}
+
 	#endif
 
 #endif
@@ -73,7 +84,7 @@ int get_sensor_data() {
 		Serial.println(timecount);
 		timecount = millis();
 		//Debug Time Count
-		#if PM25_sensor == 1
+		#if (PM25_sensor == 1 || PM25_sensor == 3 || PM25_sensor == 4)
 			sensorValue[SENSOR_ID_DUST] = (float)pm25sensorG1();
 			Serial.print("[SENSOR-DUST-PM2.5]:");
 			Serial.println(sensorValue[SENSOR_ID_DUST]);
@@ -95,6 +106,10 @@ int get_sensor_data() {
 			dht.getTempAndHumidity();
 			t = dht.values.temperature;
 			h = dht.values.humidity;
+		#elif temp_humi_sensor == 3
+			t = sht31.readTemperature();
+			h = sht31.readHumidity();
+
 		#endif
 
 		/*#ifdef USE_SHT31	//TODO
@@ -139,17 +154,74 @@ int get_sensor_data() {
 }
 
 
-#if PM25_sensor == 1
-	int pm25sensorG1() {
+#if (PM25_sensor == 1 || PM25_sensor == 3 || PM25_sensor == 4)
+int pm25sensorG1() {
+	unsigned long timeout = millis();
+	int count = 0;
+	byte incomeByte[32];
+	boolean startcount = false;
+	byte data;
+	Serial2.begin(9600);
+	while (1) {
+		if ((millis() - timeout) > 3000) {
+			Serial.println("[G1-ERROR-TIMEOUT]");
+			//#TODO:make device fail alarm message here
+			break;
+		}
+		if (Serial2.available()) {
+			data = Serial2.read();
+			if (data == 0x42 && !startcount) {
+				startcount = true;
+				count++;
+				incomeByte[0] = data;
+			}
+			else if (startcount) {
+				count++;
+				incomeByte[count - 1] = data;
+				if (count >= 32) { break; }
+			}
+		}
+	}
+	Serial2.end();
+	Serial2.flush();
+	unsigned int calcsum = 0; // BM
+	unsigned int exptsum;
+	for (int i = 0; i < 30; i++) {
+		calcsum += (unsigned int)incomeByte[i];
+	}
+
+	exptsum = ((unsigned int)incomeByte[30] << 8) + (unsigned int)incomeByte[31];
+	if (calcsum == exptsum) {
+		count = ((unsigned int)incomeByte[12] << 8) + (unsigned int)incomeByte[13];
+
+		//PM10
+		sensorValue[SENSOR_ID_DUST10] = ((unsigned int)incomeByte[14] << 8) + (unsigned int)incomeByte[15];
+
+		#if  PM25_sensor == 4
+			//Temp&Humi 
+			t = (((unsigned int)incomeByte[24] << 8) + (unsigned int)incomeByte[25]) * 0.1;
+			h = (((unsigned int)incomeByte[26] << 8) + (unsigned int)incomeByte[27]) * 0.1;
+		#endif
+
+		return count;
+	}
+	else {
+		Serial.println("#[exception] PM2.5 Sensor CHECKSUM ERROR!");
+		sensorValue[SENSOR_ID_DUST10] = -1;
+		return -1;
+	}
+}
+#elif PM25_sensor == 2
+	int pm25sensorG3() {
 		unsigned long timeout = millis();
 		int count = 0;
-		byte incomeByte[32];
+		byte incomeByte[24];
 		boolean startcount = false;
 		byte data;
 		Serial2.begin(9600);
 		while (1) {
 			if ((millis() - timeout) > 3000) {
-				Serial.println("[G1-ERROR-TIMEOUT]");
+				Serial.println("[G3-ERROR-TIMEOUT]");
 				//#TODO:make device fail alarm message here
 				break;
 			}
@@ -163,7 +235,7 @@ int get_sensor_data() {
 				else if (startcount) {
 					count++;
 					incomeByte[count - 1] = data;
-					if (count >= 32) { break; }
+					if (count >= 24) { break; }
 				}
 			}
 		}
@@ -171,11 +243,11 @@ int get_sensor_data() {
 		Serial2.flush();
 		unsigned int calcsum = 0; // BM
 		unsigned int exptsum;
-		for (int i = 0; i < 30; i++) {
+		for (int i = 0; i < 22; i++) {
 			calcsum += (unsigned int)incomeByte[i];
 		}
 
-		exptsum = ((unsigned int)incomeByte[30] << 8) + (unsigned int)incomeByte[31];
+		exptsum = ((unsigned int)incomeByte[22] << 8) + (unsigned int)incomeByte[23];
 		if (calcsum == exptsum) {
 			count = ((unsigned int)incomeByte[12] << 8) + (unsigned int)incomeByte[13];
 
@@ -186,10 +258,11 @@ int get_sensor_data() {
 		}
 		else {
 			Serial.println("#[exception] PM2.5 Sensor CHECKSUM ERROR!");
-			sensorValue[SENSOR_ID_DUST10] = -1;
 			return -1;
 		}
 	}
+
+
 #endif
 
 
